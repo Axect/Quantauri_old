@@ -11,4 +11,4 @@ dg = pd.DataFrame({
     'close': df['Close'].to_list(),
 })
 
-dg.to_parquet("../data/KB.parquet")
+dg.to_parquet("data/KB.parquet")

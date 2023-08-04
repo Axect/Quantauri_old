@@ -53,14 +53,14 @@ with plt.style.context(["science", "nature"]):
     fig.autofmt_xdate()
     fig.savefig('plot/KB_close.png', dpi=600, bbox_inches='tight')
 
-with plt.style.context(["science", "nature"]):
-    fig, ax = plt.subplots()
-    ax.autoscale(tight=True)
-    ax.set(**pparam)
-    ax.plot(date, alpha, label='Alpha')
-    ax.legend()
-    fig.autofmt_xdate()
-    fig.savefig('plot/KB_alpha.png', dpi=600, bbox_inches='tight')
+#with plt.style.context(["science", "nature"]):
+#    fig, ax = plt.subplots()
+#    ax.autoscale(tight=True)
+#    ax.set(**pparam)
+#    ax.plot(date, alpha, label='Alpha')
+#    ax.legend()
+#    fig.autofmt_xdate()
+#    fig.savefig('plot/KB_alpha.png', dpi=600, bbox_inches='tight')
 
 with plt.style.context(["science", "nature"]):
     fig, ax = plt.subplots()
