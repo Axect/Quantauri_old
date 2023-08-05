@@ -42,6 +42,11 @@ close_min = np.min(close[idx])
 close_max = np.max(close[idx])
 ylim = (close_min*0.9, close_max*1.1)
 
+# Set calpha ylim to be 90% of min and 110% of max in xlim
+calpha_min = np.min(calpha[idx])
+calpha_max = np.max(calpha[idx])
+ylim_calpha = (calpha_min*0.9, calpha_max*1.1)
+
 # Find sign change in calpha
 # buy: calpha: + -> -
 idx_buy = np.where(np.diff(np.sign(calpha)) == -2)[0]
@@ -89,6 +94,7 @@ with plt.style.context(["science", "nature"]):
     fig, ax = plt.subplots()
     ax.autoscale(tight=True)
     ax.set(**pparam)
+    ax.set_ylim(ylim_calpha)
     ax.plot(date, calpha, label='Cumulative Alpha')
     ax.plot(date[idx_buy], calpha[idx_buy], 'bo', label='Buy')
     ax.plot(date[idx_sell], calpha[idx_sell], 'ro', label='Sell')
