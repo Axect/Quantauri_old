@@ -17,6 +17,7 @@ dependencies = [
     "jupyter>=1.0.0",
     "pandas-datareader>=0.10.0",
     "scienceplots>=2.1.0",
+    "argparse>=1.4.0",
 ]
 requires-python = ">=3.11"
 readme = "README.md"

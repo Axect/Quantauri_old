@@ -35,22 +35,13 @@ This script reads the computed data and plots various graphs such as the stock's
 
 ## Usage
 
-1. **Data Download**:
-   ```
-   python script/observe.py
-   ```
+```sh
+cargo run --release
 
-2. **Make an Alpha**:
-   ```
-   cargo run
-   ```
+# And input code as string
+```
 
-3. **Plot**:
-   ```
-   python pq_plot.py
-   ```
-
-The results will be saved in the `plot` directory.
+The results and plots will be saved in the `data` and `plot` directory.
 
 ## Buy and Sell Signal
 
@@ -58,19 +49,23 @@ The buy and sell signals are determined based on sign change in cumulative alpha
 - Buy: When cumulative alpha changes from positive to negative.
 - Sell: When cumulative alpha changes from negative to positive.
 
-## Result for KB Financial Group
+## Result for Samsung Electronics (code: 005930)
 
 ### 1. Close
 
-![Close](./plot/KB_close.png)
+![Close](./plot/005930/close.png)
 
 ### 2. Cumulative Alpha (Smoothing)
 
-![Calpha](./plot/KB_calpha.png)
+![Calpha](./plot/005930/calpha.png)
 
 ### 3. Profit for each buy-sell pair
 
-![Profit](./plot/KB_profit.png)
+![Profit](./plot/005930/profit.png)
+
+### 4. Cumulative profit
+
+![CProfit](./plot/005930/cprofit.png)
 
 ## Contributing
 

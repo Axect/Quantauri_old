@@ -1,11 +1,35 @@
 use peroxide::fuga::*;
+use dialoguer::{Input, theme::ColorfulTheme};
+use std::process::{Command, Stdio};
+use std::io::{prelude::*, BufReader};
 
 const T: usize = 5;
 
 fn main() {
-    let mut df = DataFrame::read_parquet("data/KB.parquet").unwrap();
+    let code = Input::<String>::with_theme(&ColorfulTheme::default())
+        .with_prompt("Input stock code")
+        .default("005930".to_string())
+        .interact()
+        .unwrap();
+
+    // Download data using `python srcipt/observe.py --code {code}`
+    let output = Command::new("python")
+        .arg("script/observe.py")
+        .arg("--code")
+        .arg(&code)
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap()
+        .stdout
+        .unwrap();
+    let reader = BufReader::new(output);
+    for line in reader.lines() {
+        println!("{}", line.unwrap());
+    }
+
+    // Read data
+    let mut df = DataFrame::read_parquet(&format!("data/{}/close.parquet", code)).unwrap();
     df.as_types(vec![Str, F64]);
-    df.print();
 
     let date: Vec<String> = df["date"].to_vec();
     let close: Vec<f64> = df["close"].to_vec();
@@ -38,7 +62,21 @@ fn main() {
 
     dg.print();
 
-    dg.write_parquet("data/KB_alpha.parquet", CompressionOptions::Uncompressed).unwrap();
+    dg.write_parquet(&format!("data/{}/alpha.parquet", code), CompressionOptions::Uncompressed).unwrap();
+
+    // Plot using `python script/plot.py --code {code}`
+    // Wait until plot is done
+    let _ = Command::new("python")
+        .arg("script/plot.py")
+        .arg("--code")
+        .arg(&code)
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap()
+        .wait()
+        .unwrap();
+
+    println!("Done!");
 }
 
 fn ts_mean(v: &Vec<f64>, interval: usize) -> Vec<f64> {
