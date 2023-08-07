@@ -9,6 +9,8 @@ import argparse
 # Parse arguments
 parser = argparse.ArgumentParser(description='Plotting')
 parser.add_argument('--code', type=str, default='005930', help='Stock code')
+#parser.add_argument('--start', type=str, default='2010-01-01', help='Start date')
+#parser.add_argument('--end', type=str, default=dt.datetime.today().strftime('%Y-%m-%d'), help='End date')
 args = parser.parse_args()
 
 # Import parquet file
@@ -21,13 +23,14 @@ if not os.path.exists(directory):
     os.makedirs(directory)
 
 # Prepare Data to Plot
-date = np.array([dt.datetime.strptime(x, '%Y-%m-%d') for x in dg.date], dtype=np.datetime64)
-close   = dg["close"].to_numpy()
-mean    = dg["mean"].to_numpy()
-std_dev = dg["std_dev"].to_numpy()
-dev     = dg["dev"].to_numpy()
-alpha   = dg["alpha"].to_numpy()
-calpha  = dg["calpha"].to_numpy()
+date        = np.array([dt.datetime.strptime(x, '%Y-%m-%d') for x in dg.date], dtype=np.datetime64)
+close       = dg["close"].to_numpy()
+mean        = dg["mean"].to_numpy()
+std_dev     = dg["std_dev"].to_numpy()
+dev         = dg["dev"].to_numpy()
+alpha       = dg["alpha"].to_numpy()
+calpha      = dg["calpha"].to_numpy()
+buy_sell    = dg["buy_sell"].to_numpy()
 
 price_mean = np.mean(close)
 price_min_diff = price_mean * 0.05
@@ -47,12 +50,10 @@ calpha_min = np.min(calpha[idx])
 calpha_max = np.max(calpha[idx])
 ylim_calpha = (calpha_min*0.9, calpha_max*1.1)
 
-# Find sign change in calpha
-# buy: calpha: + -> -
-idx_buy = np.where(np.diff(np.sign(calpha)) == -2)[0]
-# sell: calpha: - -> +
-idx_sell = np.where(np.diff(np.sign(calpha)) == 2)[0]
+idx_buy     = np.where(buy_sell == 1)[0] 
+idx_sell    = np.where(buy_sell == -1)[0]
 print(f"Buy count: {len(idx_buy)}, Sell count: {len(idx_sell)}")
+
 # Compute profit for each buy-sell pair
 profit = np.zeros(len(date))
 for i in range(len(idx_sell)):

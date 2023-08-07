@@ -7,11 +7,12 @@ import argparse
 # Parse arguments
 parser = argparse.ArgumentParser()
 parser.add_argument('--code', type=str, default='005930')
+parser.add_argument('--start', type=str, default='2000-01-01')
+parser.add_argument('--end', type=str, default=pd.Timestamp.today().strftime('%Y-%m-%d'))
 args = parser.parse_args()
 
 # Get data
-today = pd.Timestamp.today().strftime('%Y-%m-%d')
-df = fdr.DataReader(args.code, '2000-01-01', today)
+df = fdr.DataReader(args.code, args.start, args.end)
 
 # Extraact date & Close
 dg = pd.DataFrame({
