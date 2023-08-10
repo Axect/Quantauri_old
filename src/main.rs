@@ -3,6 +3,8 @@ use dialoguer::{Input, Select, theme::ColorfulTheme};
 use std::process::{Command, Stdio};
 use std::io::{prelude::*, BufReader};
 use chrono::prelude::*;
+use rayon::prelude::*;
+use indicatif::{ProgressBar, ProgressStyle, ParallelProgressIterator};
 
 const T: usize = 5;
 
@@ -94,7 +96,13 @@ fn main() {
             }
 
             // Download data using `python srcipt/observe.py --code {code}`
+            let pb = ProgressBar::new(folders.len() as u64);
+            pb.set_style(ProgressStyle::default_bar()
+                .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
+                .unwrap()
+                .progress_chars("##-"));
             for folder in folders.clone() {
+                pb.set_message(format!("Downloading {}", folder.file_name().unwrap().to_str().unwrap()));
                 let code = folder.file_name().unwrap().to_str().unwrap().to_string();
                 let output = Command::new("python")
                     .arg("script/observe.py")
@@ -109,7 +117,10 @@ fn main() {
                 for line in reader.lines() {
                     println!("{}", line.unwrap());
                 }
+                pb.inc(1);
             }
+
+            pb.finish_with_message("Download done!");
 
             // Read data
             let mut dfs = vec![];
@@ -121,22 +132,46 @@ fn main() {
             }
 
             // Calculate alpha
-            let mut dgs = vec![];
-            for df in dfs {
-                let date: Vec<String> = df["date"].to_vec();
-                let close: Vec<f64> = df["close"].to_vec();
-                dgs.push(obtain_alpha(date, close, T));
-            }
+            let pb = ProgressBar::new(folders.len() as u64);
+            pb.set_style(ProgressStyle::default_bar()
+                .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} Computing alpha")
+                .unwrap()
+                .progress_chars("##-"));
+            let dgs = dfs.into_par_iter()
+                .progress_with(pb)
+                .map(|df| {
+                    let date: Vec<String> = df["date"].to_vec();
+                    let close: Vec<f64> = df["close"].to_vec();
+                    obtain_alpha(date, close, T)
+                })
+                .collect::<Vec<_>>();
+
+            println!("Compute done!");
 
             // Write alpha
+            let pb = ProgressBar::new(folders.len() as u64);
+            pb.set_style(ProgressStyle::default_bar()
+                .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
+                .unwrap()
+                .progress_chars("##-"));
             for (i, dg) in dgs.iter().enumerate() {
+                pb.set_message(format!("Writing {}", folders[i].file_name().unwrap().to_str().unwrap()));
                 let code = folders[i].file_name().unwrap().to_str().unwrap().to_string();
                 dg.write_parquet(&format!("data/{}/alpha.parquet", code), CompressionOptions::Uncompressed).unwrap();
+                pb.inc(1);
             }
+
+            pb.finish_with_message("Write done!");
 
             // Plot using `python script/plot.py --code {code}`
             // Wait until plot is done
-            for folder in folders {
+            let pb = ProgressBar::new(folders.len() as u64);
+            pb.set_style(ProgressStyle::default_bar()
+                .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
+                .unwrap()
+                .progress_chars("##-"));
+            folders.par_iter().for_each(|folder| {
+                pb.set_message(format!("Plotting {}", folder.file_name().unwrap().to_str().unwrap()));
                 let code = folder.file_name().unwrap().to_str().unwrap().to_string();
                 let _ = Command::new("python")
                     .arg("script/plot.py")
@@ -147,9 +182,10 @@ fn main() {
                     .unwrap()
                     .wait()
                     .unwrap();
-            }
+                pb.inc(1);
+            });
 
-            println!("Done!");
+            pb.finish_with_message("Plot done!");
         }
         _ => {}
     }
