@@ -1,5 +1,5 @@
 use peroxide::fuga::*;
-use dialoguer::{Input, theme::ColorfulTheme};
+use dialoguer::{Input, Select, theme::ColorfulTheme};
 use std::process::{Command, Stdio};
 use std::io::{prelude::*, BufReader};
 use chrono::prelude::*;
@@ -7,110 +7,152 @@ use chrono::prelude::*;
 const T: usize = 5;
 
 fn main() {
-    let code = Input::<String>::with_theme(&ColorfulTheme::default())
-        .with_prompt("Input stock code")
-        .default("005930".to_string())
+    let option = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Select option")
+        .default(0)
+        .item("Add stock via code")
+        .item("Update existing stocks")
         .interact()
         .unwrap();
 
-    let start = Input::<String>::with_theme(&ColorfulTheme::default())
-        .with_prompt("Input start date")
-        .default("2000-01-01".to_string())
-        .interact()
-        .unwrap();
+    match option {
+        0 => {
+            let code = Input::<String>::with_theme(&ColorfulTheme::default())
+                .with_prompt("Input stock code")
+                .default("005930".to_string())
+                .interact()
+                .unwrap();
 
-    // Default: today
-    let end = Input::<String>::with_theme(&ColorfulTheme::default())
-        .with_prompt("Input end date")
-        .default(Local::now().format("%Y-%m-%d").to_string())
-        .interact()
-        .unwrap();
+            let start = Input::<String>::with_theme(&ColorfulTheme::default())
+                .with_prompt("Input start date")
+                .default("2000-01-01".to_string())
+                .interact()
+                .unwrap();
 
-    // Download data using `python srcipt/observe.py --code {code}`
-    let output = Command::new("python")
-        .arg("script/observe.py")
-        .arg("--code")
-        .arg(&code)
-        .arg("--start")
-        .arg(&start)
-        .arg("--end")
-        .arg(&end)
-        .stdout(Stdio::piped())
-        .spawn()
-        .unwrap()
-        .stdout
-        .unwrap();
-    let reader = BufReader::new(output);
-    for line in reader.lines() {
-        println!("{}", line.unwrap());
-    }
+            // Default: today
+            let end = Input::<String>::with_theme(&ColorfulTheme::default())
+                .with_prompt("Input end date")
+                .default(Local::now().format("%Y-%m-%d").to_string())
+                .interact()
+                .unwrap();
 
-    // Read data
-    let mut df = DataFrame::read_parquet(&format!("data/{}/close.parquet", code)).unwrap();
-    df.as_types(vec![Str, F64]);
+            // Download data using `python srcipt/observe.py --code {code}`
+            let output = Command::new("python")
+                .arg("script/observe.py")
+                .arg("--code")
+                .arg(&code)
+                .arg("--start")
+                .arg(&start)
+                .arg("--end")
+                .arg(&end)
+                .stdout(Stdio::piped())
+                .spawn()
+                .unwrap()
+                .stdout
+                .unwrap();
+            let reader = BufReader::new(output);
+            for line in reader.lines() {
+                println!("{}", line.unwrap());
+            }
 
-    let date: Vec<String> = df["date"].to_vec();
-    let close: Vec<f64> = df["close"].to_vec();
+            // Read data
+            let mut df = DataFrame::read_parquet(&format!("data/{}/close.parquet", code)).unwrap();
+            df.as_types(vec![Str, F64]);
 
-    let mean = ts_mean(&close, T);
-    let std_dev = ts_std_dev(&close, T);
-    let dev = close.sub_v(&mean);
+            let date: Vec<String> = df["date"].to_vec();
+            let close: Vec<f64> = df["close"].to_vec();
 
-    let alpha = zip_with(|x, y| - x / (y + 1e-6), &dev, &std_dev);
+            let dg = obtain_alpha(date, close, T);
 
-    // Cumulative alpha
-    let calpha = alpha.iter()
-        .scan(0f64, |acc, &x| {
-            *acc += x;
-            Some(*acc)
-        }).collect::<Vec<f64>>();
-    let calpha_mean = ts_mean(&calpha, 20);
-    let calpha_diff = calpha.sub_v(&calpha_mean);
-    let calpha_grad = ts_diff(&calpha_diff, 1);
-    let calpha = ts_gaussian_smoothing(&calpha_grad, 5);
+            dg.print();
 
-    // Buy-Sell Signal
-    // 1. Buy when calpha : + -> -
-    // 2. Sell when calpha : - -> +
-    let mut buy_sell = vec![0f64; calpha.len()];
-    let mut is_buy = false;
-    for i in 0 .. calpha.len() {
-        if calpha[i] < 0f64 && !is_buy {
-            buy_sell[i] = 1f64;
-            is_buy = true;
-        } else if calpha[i] >= 0f64 && is_buy {
-            buy_sell[i] = -1f64;
-            is_buy = false;
+            dg.write_parquet(&format!("data/{}/alpha.parquet", code), CompressionOptions::Uncompressed).unwrap();
+
+            // Plot using `python script/plot.py --code {code}`
+            // Wait until plot is done
+            let _ = Command::new("python")
+                .arg("script/plot.py")
+                .arg("--code")
+                .arg(&code)
+                .stdout(Stdio::piped())
+                .spawn()
+                .unwrap()
+                .wait()
+                .unwrap();
+
+            println!("Done!");
         }
+        1 => {
+            // Read folders (data/{code})
+            let mut folders = vec![];
+            for entry in std::fs::read_dir("data").unwrap() {
+                let entry = entry.unwrap();
+                let path = entry.path();
+                if path.is_dir() {
+                    folders.push(path);
+                }
+            }
+
+            // Download data using `python srcipt/observe.py --code {code}`
+            for folder in folders.clone() {
+                let code = folder.file_name().unwrap().to_str().unwrap().to_string();
+                let output = Command::new("python")
+                    .arg("script/observe.py")
+                    .arg("--code")
+                    .arg(&code)
+                    .stdout(Stdio::piped())
+                    .spawn()
+                    .unwrap()
+                    .stdout
+                    .unwrap();
+                let reader = BufReader::new(output);
+                for line in reader.lines() {
+                    println!("{}", line.unwrap());
+                }
+            }
+
+            // Read data
+            let mut dfs = vec![];
+            for folder in folders.clone() {
+                let code = folder.file_name().unwrap().to_str().unwrap().to_string();
+                let mut df = DataFrame::read_parquet(&format!("data/{}/close.parquet", code)).unwrap();
+                df.as_types(vec![Str, F64]);
+                dfs.push(df);
+            }
+
+            // Calculate alpha
+            let mut dgs = vec![];
+            for df in dfs {
+                let date: Vec<String> = df["date"].to_vec();
+                let close: Vec<f64> = df["close"].to_vec();
+                dgs.push(obtain_alpha(date, close, T));
+            }
+
+            // Write alpha
+            for (i, dg) in dgs.iter().enumerate() {
+                let code = folders[i].file_name().unwrap().to_str().unwrap().to_string();
+                dg.write_parquet(&format!("data/{}/alpha.parquet", code), CompressionOptions::Uncompressed).unwrap();
+            }
+
+            // Plot using `python script/plot.py --code {code}`
+            // Wait until plot is done
+            for folder in folders {
+                let code = folder.file_name().unwrap().to_str().unwrap().to_string();
+                let _ = Command::new("python")
+                    .arg("script/plot.py")
+                    .arg("--code")
+                    .arg(&code)
+                    .stdout(Stdio::piped())
+                    .spawn()
+                    .unwrap()
+                    .wait()
+                    .unwrap();
+            }
+
+            println!("Done!");
+        }
+        _ => {}
     }
-
-    let mut dg = DataFrame::new(vec![]);
-    dg.push("date", Series::new(date));
-    dg.push("close", Series::new(close));
-    dg.push("mean", Series::new(mean));
-    dg.push("std_dev", Series::new(std_dev));
-    dg.push("dev", Series::new(dev));
-    dg.push("alpha", Series::new(alpha));
-    dg.push("calpha", Series::new(calpha));
-    dg.push("buy_sell", Series::new(buy_sell));
-
-    dg.print();
-
-    dg.write_parquet(&format!("data/{}/alpha.parquet", code), CompressionOptions::Uncompressed).unwrap();
-
-    // Plot using `python script/plot.py --code {code}`
-    // Wait until plot is done
-    let _ = Command::new("python")
-        .arg("script/plot.py")
-        .arg("--code")
-        .arg(&code)
-        .stdout(Stdio::piped())
-        .spawn()
-        .unwrap()
-        .wait()
-        .unwrap();
-
-    println!("Done!");
 }
 
 fn ts_mean(v: &Vec<f64>, interval: usize) -> Vec<f64> {
@@ -171,4 +213,50 @@ fn ts_gaussian_smoothing(v: &Vec<f64>, interval: usize) -> Vec<f64> {
         result[i] = numerator / (denominator + 1e-9);
     }
     result
+}
+
+#[allow(non_snake_case)]
+fn obtain_alpha(date: Vec<String>, close: Vec<f64>, interval: usize) -> DataFrame {
+    let mean = ts_mean(&close, interval);
+    let std_dev = ts_std_dev(&close, interval);
+    let dev = close.sub_v(&mean);
+
+    let alpha = zip_with(|x, y| - x / (y + 1e-6), &dev, &std_dev);
+
+    // Cumulative alpha
+    let calpha = alpha.iter()
+        .scan(0f64, |acc, &x| {
+            *acc += x;
+            Some(*acc)
+        }).collect::<Vec<f64>>();
+    let calpha_mean = ts_mean(&calpha, 20);
+    let calpha_diff = calpha.sub_v(&calpha_mean);
+    let calpha_grad = ts_diff(&calpha_diff, 1);
+    let calpha = ts_gaussian_smoothing(&calpha_grad, 5);
+
+    // Buy-Sell Signal
+    // 1. Buy when calpha : + -> -
+    // 2. Sell when calpha : - -> +
+    let mut buy_sell = vec![0f64; calpha.len()];
+    let mut is_buy = false;
+    for i in 0 .. calpha.len() {
+        if calpha[i] < 0f64 && !is_buy {
+            buy_sell[i] = 1f64;
+            is_buy = true;
+        } else if calpha[i] >= 0f64 && is_buy {
+            buy_sell[i] = -1f64;
+            is_buy = false;
+        }
+    }
+    let mut dg = DataFrame::new(vec![]);
+    dg.push("date", Series::new(date));
+    dg.push("close", Series::new(close));
+    dg.push("mean", Series::new(mean));
+    dg.push("std_dev", Series::new(std_dev));
+    dg.push("dev", Series::new(dev));
+    dg.push("alpha", Series::new(alpha));
+    dg.push("calpha", Series::new(calpha));
+    dg.push("buy_sell", Series::new(buy_sell));
+
+    dg
 }
