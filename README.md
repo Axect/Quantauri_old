@@ -93,6 +93,7 @@ LG Energy Solution (LG에너지솔루션) | 373220 | [close](./plot/373220/close
 AMD | AMD | [close](./plot/AMD/close.png) | [calpha](./plot/AMD/calpha.png) | [profit](./plot/AMD/profit.png) | [cprofit](./plot/AMD/cprofit.png)
 Coupang | CPNG | [close](./plot/CPNG/close.png) | [calpha](./plot/CPNG/calpha.png) | [profit](./plot/CPNG/profit.png) | [cprofit](./plot/CPNG/cprofit.png)
 IBM | IBM | [close](./plot/IBM/close.png) | [calpha](./plot/IBM/calpha.png) | [profit](./plot/IBM/profit.png) | [cprofit](./plot/IBM/cprofit.png)
+IONQ | IONQ | [close](./plot/IONQ/close.png) | [calpha](./plot/IONQ/calpha.png) | [profit](./plot/IONQ/profit.png) | [cprofit](./plot/IONQ/cprofit.png)
 Tesla | TSLA | [close](./plot/TSLA/close.png) | [calpha](./plot/TSLA/calpha.png) | [profit](./plot/TSLA/profit.png) | [cprofit](./plot/TSLA/cprofit.png)
 
 ## Contributing
