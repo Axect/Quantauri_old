@@ -59,12 +59,14 @@ fn main() {
 
             // Read data
             let mut df = DataFrame::read_parquet(&format!("data/{}/close.parquet", code)).unwrap();
-            df.as_types(vec![Str, F64]);
+            df.as_types(vec![Str, F64, F64, F64]);
 
             let date: Vec<String> = df["date"].to_vec();
             let close: Vec<f64> = df["close"].to_vec();
+            let high: Vec<f64> = df["high"].to_vec();
+            let low: Vec<f64> = df["low"].to_vec();
 
-            let dg = obtain_alpha(date, close, T);
+            let dg = obtain_alpha(date, close, high, low, T);
 
             dg.print();
 
@@ -127,7 +129,7 @@ fn main() {
             for folder in folders.clone() {
                 let code = folder.file_name().unwrap().to_str().unwrap().to_string();
                 let mut df = DataFrame::read_parquet(&format!("data/{}/close.parquet", code)).unwrap();
-                df.as_types(vec![Str, F64]);
+                df.as_types(vec![Str, F64, F64, F64]);
                 dfs.push(df);
             }
 
@@ -142,7 +144,9 @@ fn main() {
                 .map(|df| {
                     let date: Vec<String> = df["date"].to_vec();
                     let close: Vec<f64> = df["close"].to_vec();
-                    obtain_alpha(date, close, T)
+                    let high: Vec<f64> = df["high"].to_vec();
+                    let low: Vec<f64> = df["low"].to_vec();
+                    obtain_alpha(date, close, high, low, T)
                 })
                 .collect::<Vec<_>>();
 
@@ -252,23 +256,13 @@ fn ts_gaussian_smoothing(v: &Vec<f64>, interval: usize) -> Vec<f64> {
 }
 
 #[allow(non_snake_case)]
-fn obtain_alpha(date: Vec<String>, close: Vec<f64>, interval: usize) -> DataFrame {
+fn obtain_alpha(date: Vec<String>, close: Vec<f64>, high: Vec<f64>, low: Vec<f64>, interval: usize) -> DataFrame {
+    // For close
     let mean = ts_mean(&close, interval);
     let std_dev = ts_std_dev(&close, interval);
     let dev = close.sub_v(&mean);
-
     let alpha = zip_with(|x, y| - x / (y + 1e-6), &dev, &std_dev);
-
-    // Cumulative alpha
-    let calpha = alpha.iter()
-        .scan(0f64, |acc, &x| {
-            *acc += x;
-            Some(*acc)
-        }).collect::<Vec<f64>>();
-    let calpha_mean = ts_mean(&calpha, 20);
-    let calpha_diff = calpha.sub_v(&calpha_mean);
-    let calpha_grad = ts_diff(&calpha_diff, 1);
-    let calpha = ts_gaussian_smoothing(&calpha_grad, 5);
+    let (calpha, calpha2) = alpha_to_calpha(&alpha);
 
     // Buy-Sell Signal
     // 1. Buy when calpha : + -> -
@@ -287,12 +281,29 @@ fn obtain_alpha(date: Vec<String>, close: Vec<f64>, interval: usize) -> DataFram
     let mut dg = DataFrame::new(vec![]);
     dg.push("date", Series::new(date));
     dg.push("close", Series::new(close));
+    dg.push("high", Series::new(high));
+    dg.push("low", Series::new(low));
     dg.push("mean", Series::new(mean));
     dg.push("std_dev", Series::new(std_dev));
-    dg.push("dev", Series::new(dev));
     dg.push("alpha", Series::new(alpha));
     dg.push("calpha", Series::new(calpha));
+    dg.push("calpha2", Series::new(calpha2));
     dg.push("buy_sell", Series::new(buy_sell));
 
     dg
+}
+
+fn alpha_to_calpha(alpha: &Vec<f64>) -> (Vec<f64>, Vec<f64>) {
+    // Cumulative alpha
+    let calpha = alpha.iter()
+        .scan(0f64, |acc, &x| {
+            *acc += x;
+            Some(*acc)
+        }).collect::<Vec<f64>>();
+    let calpha_mean = ts_mean(&calpha, 20);
+    let calpha_diff = calpha.sub_v(&calpha_mean);
+    let calpha_grad = ts_diff(&calpha_diff, 1);
+    let calpha = ts_gaussian_smoothing(&calpha_grad, 5);
+    let calpha2 = ts_gaussian_smoothing(&calpha_grad, 10);
+    (calpha, calpha2)
 }

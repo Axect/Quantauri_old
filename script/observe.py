@@ -18,6 +18,8 @@ df = fdr.DataReader(args.code, args.start, args.end)
 dg = pd.DataFrame({
     'date': df.index.strftime('%Y-%m-%d').to_list(),
     'close': df['Close'].to_list(),
+    'high': df['High'].to_list(),
+    'low': df['Low'].to_list(),
 })
 
 # Save data to "data/{code}/close.parquet"
